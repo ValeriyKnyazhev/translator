@@ -18,8 +18,9 @@ type TranslationResponse struct {
 }
 
 type Config struct {
-	ApiKey string `yaml:"ApiKey"`
-	Hits int64 `yaml:"Hits"`
+	YandexApiKey string `yaml:"yandexApiKey"`
+	MicrosoftApiKey string `yaml:"microsoftApiKey"`
+	MicrosoftServerUrl string `yaml:"microsoftServerUrl"`
 }
 
 func (c *Config) readConfig() *Config {
@@ -65,7 +66,7 @@ func main() {
 	fmt.Println(config)
 	data.Set("text", "Hello world!")
 	data.Set("lang", "en-ru")
-	data.Set("key", config.ApiKey)
+	data.Set("key", config.YandexApiKey)
 
 	u, _ := url.ParseRequestURI(translatorUrl)
 	u.Path = resource

@@ -1,0 +1,3 @@
+yandexApiKey: your apiKey for yandex translator API
+microsoftApiKey: your apiKey for microsoft computer vision API
+microsoftServerUrl: url address to microsoft server for future calculation

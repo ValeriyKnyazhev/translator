@@ -17,4 +17,4 @@
 .idea/
 
 # config
-resources/
+resources/config.yaml
