@@ -1,29 +1,24 @@
 package main
 
 import (
-	"./configuration"
-	"./translator"
+	"./aitserver"
 	"fmt"
-	"os"
+	"log"
 )
 
 func main() {
-	config, err := configuration.ReadConfig()
+
+	testServer := aitserver.NewServer()
+
+	err := testServer.InitServer("", "2345")
 	if err != nil {
-		fmt.Println("[MAIN] unable to read configuration:", err)
-		os.Exit(1)
+		log.Fatal("[MAIN] Init Server Error:", err)
 	}
 
-	interpreter := translator.CreateTranslator(
-		config.TranslatorServerUrl,
-		config.TranslatorResourceUrl,
-		config.TranslatorApiKey)
+	err = testServer.StartServer()
 
-	translation, err := interpreter.Translate("en-ru", "Hello world!\nMy name is Valeriy.")
 	if err != nil {
-		fmt.Println("[MAIN] unable to parse request url:", err)
-		os.Exit(1)
+		log.Fatal("[MAIN] Start server Error:", err)
 	}
-	fmt.Println(translation)
 
 }
