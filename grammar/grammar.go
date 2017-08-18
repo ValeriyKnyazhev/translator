@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -54,13 +55,13 @@ func (gChecker *GrammarChecker) CheckPhrase(text string, options ...int) (string
 
 	body, err := ioutil.ReadAll(grammarResponse.Body)
 	if err != nil {
-		fmt.Println("unable to read responce body:", err)
+		fmt.Println("unable to read response body:", err)
 		return "", err
 	}
 	var words []Word
 	err = json.Unmarshal(body, &words)
 	if err != nil {
-		fmt.Println("unable to get phrase from responce:", err)
+		fmt.Println("unable to get phrase from response:", err)
 	}
 
 	text = replaceWords(text, words)
@@ -78,12 +79,12 @@ func replaceWords(text string, words []Word) string {
 }
 
 func dumpInfo(words []Word) {
-	fmt.Println("------------------------------------")
-	fmt.Println("Следующие слова были изменены:\n")
+	log.Println("------------------------------------")
+	log.Println("Следующие слова были изменены:\n")
 	for _, word := range words {
 		if len(word.S[0]) > 0 {
-			fmt.Println(word.Word, " -> ", word.S[0])
+			log.Println(word.Word, " -> ", word.S[0])
 		}
 	}
-	fmt.Println("------------------------------------")
+	log.Println("------------------------------------")
 }
