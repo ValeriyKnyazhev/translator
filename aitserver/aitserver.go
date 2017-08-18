@@ -10,8 +10,8 @@ import (
 )
 
 type AitServer struct {
-	ServerConfig  configuration.Config
-	ServerVision  vision.Visoin
+	ServerConfig  *configuration.Config
+	ServerVision  vision.Vision
 	ServerGrammar grammar.GrammarChecker
 	ServerTrans   translator.Translator
 	Host          string
@@ -19,14 +19,14 @@ type AitServer struct {
 }
 
 func NewServer() AitServer {
-	return AitServer{configuration.Config{}, vision.Visoin{}, grammar.GrammarChecker{}, translator.Translator{}, "", ""}
+	return AitServer{&configuration.Config{}, vision.Vision{}, grammar.GrammarChecker{}, translator.Translator{}, "", ""}
 }
 
 func (servConf *AitServer) InitServer(host string, port string) (err error) {
 	servConf.Host = host
 	servConf.Port = port
 
-	servConf.ServerConfig = configuration.ReadConfig()
+	servConf.ServerConfig, err = configuration.ReadConfig()
 	if err != nil {
 		return
 	}
@@ -44,6 +44,7 @@ func (servConf *AitServer) InitServer(host string, port string) (err error) {
 		servConf.ServerConfig.TranslatorResourceUrl,
 		servConf.ServerConfig.TranslatorApiKey)
 
+        return
 }
 
 func (servConf *AitServer) StartServer() (err error) {
@@ -57,7 +58,7 @@ func (servConf *AitServer) StartServer() (err error) {
 		if err != nil {
 			continue
 		}
-		go handleServerConnection(c)
+		go servConf.connectionHandler(connection)
 	}
 
 }
@@ -71,12 +72,12 @@ func (servConf AitServer) connectionHandler(connect net.Conn) (err error) {
 	reqStr := ""
 	bitNum := 0
 
-	for bitNum, err = connect.Read(textBuff); bitNum > 0; bitNum, err = file.Read(buff) {
+	for bitNum, err = connect.Read(textBuff); bitNum > 0; bitNum, err = connect.Read(textBuff) {
 		var itArr int
 
-		if err != nil {
-			return
-		}
+                if err != nil {
+                    return
+                }
 
 		for itArr = 0; itArr < bitNum; itArr++ {
 			if textBuff[itArr] == '\n' {
@@ -84,16 +85,23 @@ func (servConf AitServer) connectionHandler(connect net.Conn) (err error) {
 			}
 		}
 		reqStr += string(textBuff[:itArr])
-		if butNum != itArr {
+		if bitNum != itArr {
 			break
 		}
 	}
 
-	imgDes, err := visioonn.GetTextFromImg(reqStr, vision.UrlPathType, vision.OcrImgType, "en")
+        fmt.Println(reqStr)
+
+	imgDes, err := servConf.ServerVision.GetTextFromImg("http://5klass.net/datas/russkij-jazyk/Prichastie-10-klass/0008-008-Rabota-s-tekstom-variant-A-zadanie-v-kakoj-posledovatelnosti.jpg", vision.UrlPathType, vision.OcrImgType, "en")
 
 	if err != nil {
+
+        fmt.Println(err)
+
 		return
 	}
+
+        fmt.Println(imgDes.Text)
 
 	textGram, err := servConf.ServerGrammar.CheckPhrase(imgDes.Text)
 	if err != nil {
@@ -105,5 +113,7 @@ func (servConf AitServer) connectionHandler(connect net.Conn) (err error) {
 		return
 	}
 
-	connect.Write([]byte(reqStr))
+	connect.Write([]byte(translation.Text[0]))
+
+        return
 }
