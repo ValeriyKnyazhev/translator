@@ -2,7 +2,7 @@ visionApiKey: your apiKey for microsoft computer vision API
 visionServerUrl: url address to microsoft server for future calculation
 grammarApiKey: your apiKey for yandex speller API
 grammarServerUrl: url address to yandex server for check grammatics and fix some mistakes
-grammarResource: url path to yandex server for grammar fix
+grammarResourceUrl: url path to yandex server for grammar fix
 translatorApiKey: your apiKey for yandex translator API
 translatorServerUrl: url address to microsoft server for text translation
 translatorResourceUrl: url path to yandex server for translation

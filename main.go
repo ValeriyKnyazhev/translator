@@ -17,6 +17,7 @@ func main() {
 
 	err = testServer.StartServer()
 
+
 	if err != nil {
 		log.Fatal("[MAIN] Start server Error:", err)
 	}
