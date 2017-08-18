@@ -4,16 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"net/http"
+        "net/url"
 )
 
 type WordArray struct {
 	Text          string
-	WordPosition  uint64
-	LineNumber    uint64
-	RegionsNumber uint64
+	WordPosition  int
+	LineNumber    int
+	RegionsNumber int
 }
 
 type ImgText struct {
@@ -52,7 +52,7 @@ func getOcrImgText(jsonBody []byte, imgtext *ImgText) (err error) {
 		return
 	}
 
-	imgtext = ImgText{}
+	*imgtext = ImgText{}
 	imgtext.Language = ocrResp.Language
 
 	for rIt, rOcr := range ocrResp.Regions {
@@ -103,7 +103,7 @@ func getHwImgText(jsonBody []byte, imgtext *ImgText) (err error) {
 		return
 	}
 
-	imgtext = ImgText{}
+	*imgtext = ImgText{}
 	imgtext.Language = "en"
 
 	for lIt, lHw := range hwResp.RecognitionResult.Lines {
@@ -139,16 +139,16 @@ func CreateVisoin(serverUrl string, apiKey string) Vision {
 	return Vision{serverUrl, apiKey, &http.Client{}, ImgText{}}
 }
 
-func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType uint8i, lang string) (err error) {
+func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType uint8, lang string) (err error) {
 
 	urlV := url.Values{}
-	urlV.Set("lang", lang)
 	urlV.Set("subscription-key", imgt.ApiKey)
 
 	var requestMethod string
 	var responseParseFunction func([]byte, *ImgText) error
 
 	if recImgType == OcrImgType {
+                urlV.Set("lang", lang)
 		urlV.Set("detectOrientation", "true")
 		requestMethod = "ocr"
 		responseParseFunction = getOcrImgText
@@ -161,24 +161,26 @@ func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType ui
 		return
 	}
 
-	fullServerPath = imgt.ServerUrl + requestMethod
+	fullServerPath := imgt.ServerUrl + "/" + requestMethod
 
 	urlPath, err := url.ParseRequestURI(fullServerPath)
 	if err != nil {
 		return
 	}
 
-	var dataBuff *Buffer
+	var dataBuff *bytes.Buffer
 	var contentTypeRequest string
 
 	if pathType == FullPathType {
-		imgData, err := ioutil.ReadFile(imgPath)
+                var imgData []byte
+		imgData, err = ioutil.ReadFile(imgPath)
 		if err != nil {
 			return
 		}
 		dataBuff = bytes.NewBuffer(imgData)
 		contentTypeRequest = "application/octet-stream"
 	} else if pathType == UrlPathType {
+                var imgUrl *url.URL
 		imgUrl, err = url.ParseRequestURI(imgPath)
 		if err != nil {
 			return
