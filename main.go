@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/ValeriyKnyazhev/translator/configuration"
+	"github.com/ValeriyKnyazhev/translator/grammar"
+	"github.com/ValeriyKnyazhev/translator/translator"
 	"os"
-	"translator/configuration"
-	"translator/grammar"
-	"translator/translator"
 )
 
 func main() {
