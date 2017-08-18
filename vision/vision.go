@@ -132,17 +132,18 @@ type Vision struct {
 	ServerUrl string
 	ApiKey    string
 	Client    *http.Client
-	Text      ImgText
 }
 
 func CreateVisoin(serverUrl string, apiKey string) Vision {
-	return Vision{serverUrl, apiKey, &http.Client{}, ImgText{}}
+	return Vision{serverUrl, apiKey, &http.Client{}}
 }
 
-func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType uint8, lang string) (err error) {
+func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType uint8, lang string) (imgT ImgText, err error) {
 
 	urlV := url.Values{}
 	urlV.Set("subscription-key", imgt.ApiKey)
+
+        imgT = ImgText{}
 
 	var requestMethod string
 	var responseParseFunction func([]byte, *ImgText) error
@@ -210,7 +211,7 @@ func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType ui
 		return
 	}
 
-	err = responseParseFunction(responseBody, &imgt.Text)
+	err = responseParseFunction(responseBody, &imgT)
 	if err != nil {
 		return
 	}
