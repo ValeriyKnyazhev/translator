@@ -18,3 +18,4 @@
 
 # config
 resources/config.yaml
+resources/dbconfig.yaml
