@@ -16,6 +16,9 @@ type Config struct {
 	TranslatorApiKey      string `yaml:"translatorApiKey"`
 	TranslatorServerUrl   string `yaml:"translatorServerUrl"`
 	TranslatorResourceUrl string `yaml:"translatorResourceUrl"`
+	HTTPServerHost        string `yaml:"httpServerHost"`
+	HTTPServerPort        string `yaml:"httpServerPort"`
+        HTTPServerLogFile     string `yaml:"httpServerLogFile"`
 }
 
 func ReadConfig() (*Config, error) {

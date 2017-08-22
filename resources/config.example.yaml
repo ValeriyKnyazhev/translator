@@ -6,3 +6,7 @@ grammarResourceUrl: url path to yandex server for grammar fix
 translatorApiKey: your apiKey for yandex translator API
 translatorServerUrl: url address to microsoft server for text translation
 translatorResourceUrl: url path to yandex server for translation
+httpServerHost: localhost  
+httpServerPort: 2345
+httpServerLogFle: httpServerLog.log
+

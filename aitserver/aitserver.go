@@ -5,30 +5,77 @@ import (
 	"../grammar"
 	"../translator"
 	"../vision"
+	"encoding/json"
 	"fmt"
-	"net"
+	"github.com/gorilla/mux"
+	"github.com/satori/go.uuid"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
 )
 
-type AitServer struct {
+type aitServerLog struct {
+	logFileName string
+	logFile     *os.File
+	logObj      *log.Logger
+}
+
+func newLogger(logName string) *aitServerLog {
+	return &aitServerLog{logName, nil, nil}
+}
+
+func (logServ *aitServerLog) creatLogger() error {
+	var err error
+	logServ.logFile, err = os.OpenFile(logServ.logFileName, os.O_WRONLY | os.O_CREATE, 0666)
+	if err != nil {
+		return err
+	}
+
+	logServ.logObj = log.New(logServ.logFile, "AitHTTPServer: ", log.Lshortfile)
+
+	return nil
+}
+
+func (logServ *aitServerLog) closeLogger() error {
+	return logServ.logFile.Close()
+}
+
+type AitHTTPServer struct {
 	ServerConfig  *configuration.Config
 	ServerVision  vision.Vision
 	ServerGrammar grammar.GrammarChecker
 	ServerTrans   translator.Translator
-	Host          string
-	Port          string
+	ServerHost    string
+	ServerPort    string
+	ServerLogger  *aitServerLog
 }
 
-func NewServer() AitServer {
-	return AitServer{&configuration.Config{}, vision.Vision{}, grammar.GrammarChecker{}, translator.Translator{}, "", ""}
+func NewHTTPServer() *AitHTTPServer {
+	return &AitHTTPServer{&configuration.Config{},
+		vision.Vision{},
+		grammar.GrammarChecker{},
+		translator.Translator{},
+		"",
+		"",
+		&aitServerLog{}}
 }
 
-func (servConf *AitServer) InitServer(host string, port string) (err error) {
-	servConf.Host = host
-	servConf.Port = port
+func (servConf *AitHTTPServer) initServer() error {
 
+	var err error
 	servConf.ServerConfig, err = configuration.ReadConfig()
 	if err != nil {
-		return
+		log.Println("Config Error: ", err)
+		return err
+	}
+
+	servConf.ServerLogger = newLogger(servConf.ServerConfig.HTTPServerLogFile)
+
+	err = servConf.ServerLogger.creatLogger()
+	if err != nil {
+		log.Println("newLogger Error: ", err)
+		return err
 	}
 
 	servConf.ServerVision = vision.CreateVisoin(
@@ -44,76 +91,139 @@ func (servConf *AitServer) InitServer(host string, port string) (err error) {
 		servConf.ServerConfig.TranslatorResourceUrl,
 		servConf.ServerConfig.TranslatorApiKey)
 
-        return
+	servConf.ServerHost = servConf.ServerConfig.HTTPServerHost
+	servConf.ServerPort = servConf.ServerConfig.HTTPServerPort
+
+	return nil
 }
 
-func (servConf *AitServer) StartServer() (err error) {
-	lnistenServ, err := net.Listen("tcp", servConf.Host+":"+servConf.Port)
+func (servConf *AitHTTPServer) stopServer() error {
+	err := servConf.ServerLogger.closeLogger()
 	if err != nil {
-		fmt.Println(err)
+		return err
+	}
+	return nil
+}
+
+type serverErrorResponse struct {
+	Code string `json:"code"`
+	Info string `json:"info"`
+}
+
+type serverAcceptedResponse struct {
+	Info string `json:"info"`
+	Id   string `json:"id"`
+}
+
+type serverRequsetURLPost struct {
+	PictureUrl string `json:"pictureUrl"`
+	LangFrom   string `json:"langFrom"`
+	LangTo     string `json:"langTo"`
+}
+
+func (servConf AitHTTPServer) makeResponse(w http.ResponseWriter, code int, body interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	err := json.NewEncoder(w).Encode(body)
+	if err != nil {
+		servConf.ServerLogger.logObj.Println(err)
+
+	}
+}
+
+func (servConf AitHTTPServer) CreatNewTranslationTask(w http.ResponseWriter, req *http.Request) {
+
+        log.Println("New connect for POST")
+
+	reqBody, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		servConf.ServerLogger.logObj.Println(err)
+		servConf.makeResponse(w, http.StatusInternalServerError, serverErrorResponse{Code: http.StatusText(http.StatusInternalServerError), Info: fmt.Sprint(err)})
 		return
 	}
-	for {
-		connection, err := lnistenServ.Accept()
-		if err != nil {
-			continue
-		}
-		go servConf.connectionHandler(connection)
+
+	var reqURLimg serverRequsetURLPost
+	err = json.Unmarshal(reqBody, &reqURLimg)
+	if err != nil {
+		servConf.ServerLogger.logObj.Println(err)
+		servConf.makeResponse(w, http.StatusInternalServerError, serverErrorResponse{Code: http.StatusText(http.StatusInternalServerError), Info: fmt.Sprint(err)})
+		return
 	}
+
+	uuid := uuid.NewV4()
+	/*
+	   insert to DB
+	*/
+
+	/*
+
+	   Start Task
+
+	*/
+	//test { "pictureUrl": "https://www.w3.org/TR/SVGTiny12/examples/textArea01.png", "langFrom": "en", "langTo" : "ru" } 
+	TEXT, _ := servConf.ServerVision.GetTextFromImg(reqURLimg.PictureUrl, vision.UrlPathType, vision.OcrImgType, reqURLimg.LangFrom)
+
+	servConf.makeResponse(w, http.StatusAccepted, serverAcceptedResponse{Info: TEXT.Text, Id: string(uuid[:])})
+//	servConf.makeResponse(w, http.StatusAccepted, serverAcceptedResponse{Info: "For future translation use request Id", Id: string(uuid[:])})
 
 }
 
-func (servConf AitServer) connectionHandler(connect net.Conn) (err error) {
-	defer connect.Close()
+type serverOKResponseForGet struct {
+	LangFrom string `json:"langFrom"`
+	LangTo   string `json:"langTo"`
+	Text     string `json:"text"`
+}
 
-	const buffMaxSize = 1024
+func (servConf AitHTTPServer) GetTranslationResult(w http.ResponseWriter, req *http.Request) {
 
-	textBuff := make([]byte, buffMaxSize)
-	reqStr := ""
-	bitNum := 0
+        log.Println("New connect for GET")
+	params := mux.Vars(req)
+	taskID := params["id"]
 
-	for bitNum, err = connect.Read(textBuff); bitNum > 0; bitNum, err = connect.Read(textBuff) {
-		var itArr int
+	/*
+	   insert to DB
+	*/
+	/* if not found
+		       servConf.ServerLogger.Println(<<err msg>>)
+	               makeResponse(w, http.StatusNotFound, &serverErrorResponse{Code: http.StatusText(http.StatusNotFound), Info: fmt.Sprint(<<err msg>>)})
+		       return
+		   else if task run or die
+		       if initTime > 5 (min)
+		          restart task
 
-                if err != nil {
-                    return
-                }
+		       servConf.ServerLogger.Println(<<err msg>>)
+		       makeResponse(w, http.StatusAccepted, &serverAcceptedResponse {Info: "For future translation use request Id", Id: taskID})
+		       return
 
-		for itArr = 0; itArr < bitNum; itArr++ {
-			if textBuff[itArr] == '\n' {
-				break
-			}
-		}
-		reqStr += string(textBuff[:itArr])
-		if bitNum != itArr {
-			break
-		}
-	}
+		   else if task is complite
+		   makeResponse(w, http.StatusOK, &serverOKResponseForGet {LangFrom: "unk", LangTo: "unk", Text: "text"})
+		       return
+	*/
+	//test
+	servConf.makeResponse(w, http.StatusOK, serverOKResponseForGet{LangFrom: "unk", LangTo: "unk", Text: taskID})
 
-        fmt.Println(reqStr)
+}
 
-	imgDes, err := servConf.ServerVision.GetTextFromImg("http://5klass.net/datas/russkij-jazyk/Prichastie-10-klass/0008-008-Rabota-s-tekstom-variant-A-zadanie-v-kakoj-posledovatelnosti.jpg", vision.UrlPathType, vision.OcrImgType, "en")
+func (servConf *AitHTTPServer) RunHTTPServer() error {
 
+	err := servConf.initServer()
 	if err != nil {
-
-        fmt.Println(err)
-
-		return
+		log.Println("Init Error: ", err)
+		return err
 	}
+	defer servConf.stopServer()
 
-        fmt.Println(imgDes.Text)
+        log.Println("Server run!")
+	log.Println("Host: ", servConf.ServerHost)
+	log.Println("Port: ", servConf.ServerPort)
 
-	textGram, err := servConf.ServerGrammar.CheckPhrase(imgDes.Text)
+	router := mux.NewRouter()
+	router.HandleFunc("/translation", servConf.CreatNewTranslationTask).Methods(http.MethodPost)
+	router.HandleFunc("/translation/{id}", servConf.GetTranslationResult).Methods(http.MethodGet)
+
+	err = http.ListenAndServe(servConf.ServerHost+":"+servConf.ServerPort, router)
 	if err != nil {
-		return
+		return err
 	}
-
-	translation, err := servConf.ServerTrans.Translate("en-ru", textGram)
-	if err != nil {
-		return
-	}
-
-	connect.Write([]byte(translation.Text[0]))
-
-        return
+	return nil
 }

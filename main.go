@@ -7,18 +7,11 @@ import (
 
 func main() {
 
-	testServer := aitserver.NewServer()
+	testServer := aitserver.NewHTTPServer()
 
-	err := testServer.InitServer("", "2345")
+	err := testServer.RunHTTPServer()
 	if err != nil {
-		log.Fatal("[MAIN] Init Server Error:", err)
-	}
-
-	err = testServer.StartServer()
-
-
-	if err != nil {
-		log.Fatal("[MAIN] Start server Error:", err)
+		log.Println("[MAIN] Init Server Error:", err)
 	}
 
 }
