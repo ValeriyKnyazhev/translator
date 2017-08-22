@@ -6,12 +6,14 @@ import (
 	"github.com/ValeriyKnyazhev/translator/configuration"
 	_ "github.com/lib/pq"
 	"log"
+	"time"
 )
 
 type DBManager interface {
 	CreateTable() error
 	GetData(uuid string) (*Data, error)
 	SetData(d *Data) error
+	UpdateData(d *Data) error
 }
 
 type dbmanager struct {
@@ -41,15 +43,18 @@ func init() {
 
 var createTableStatment string = `
 	CREATE TABLE IF NOT EXISTS tasks (
-		id             UUID    CONSTRAINT uuid PRIMARY KEY,
-		userId         integer NOT NULL,
-		pictureUrl     text    NOT NULL,
+		id             UUID        CONSTRAINT uuid PRIMARY KEY,
+		timestamp      TIMESTAMP   DEFAULT (NOW()),
+		userId         integer     NOT NULL,
+		pictureUrl     text        NOT NULL,
 		recognizedText text,
-		recognizedLang varchar(2),
+		recognizedLang varchar(3),
 		checkedText    text,
 		translatedText text,
-		translatedLang varchar(2)
-	)`
+		translatedLang varchar(3),
+		error          text
+	);
+	CREATE INDEX ON tasks (userId);`
 
 func (mgr *dbmanager) CreateTable() (err error) {
 	_, err = mgr.db.Exec(createTableStatment)
@@ -62,6 +67,7 @@ func (mgr *dbmanager) CreateTable() (err error) {
 
 type Data struct {
 	Id             string
+	Timestamp      time.Time
 	UserId         int
 	PictureUrl     string
 	RecognizedText string
@@ -69,6 +75,7 @@ type Data struct {
 	CheckedText    string
 	TranslatedText string
 	TranslatedLang string
+	Error          string
 }
 
 var getStatment string = `SELECT * FROM tasks WHERE id=$1`
@@ -76,9 +83,9 @@ var getStatment string = `SELECT * FROM tasks WHERE id=$1`
 func (mgr *dbmanager) GetData(uuid string) (*Data, error) {
 	row := mgr.db.QueryRow(getStatment, uuid)
 	d := &Data{}
-	switch err := row.Scan(&d.Id, &d.UserId, &d.PictureUrl,
+	switch err := row.Scan(&d.Id, &d.Timestamp, &d.UserId, &d.PictureUrl,
 		&d.RecognizedText, &d.RecognizedLang, &d.CheckedText,
-		&d.TranslatedText, &d.TranslatedLang); err {
+		&d.TranslatedText, &d.TranslatedLang, &d.Error); err {
 	case sql.ErrNoRows:
 		log.Println("No rows were returned!")
 		return nil, nil
@@ -89,14 +96,44 @@ func (mgr *dbmanager) GetData(uuid string) (*Data, error) {
 	}
 }
 
-var setStatment string = `INSERT INTO tasks (id ,userId, pictureUrl, recognizedText, recognizedLang, checkedText, translatedText, translatedLang) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+var setStatment string = `INSERT INTO tasks (
+	id,
+	userId,
+	pictureUrl,
+	recognizedText,
+	recognizedLang,
+	checkedText,
+	translatedText,
+	translatedLang,
+	error) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
 func (mgr *dbmanager) SetData(d *Data) error {
 	_, err := mgr.db.Exec(setStatment, d.Id, d.UserId, d.PictureUrl,
 		d.RecognizedText, d.RecognizedLang, d.CheckedText,
-		d.TranslatedText, d.TranslatedLang)
+		d.TranslatedText, d.TranslatedLang, d.Error)
 	if err != nil {
 		log.Println("can't set data: ", err)
+		return err
+	}
+	return err
+}
+
+var updateStatment string = `UPDATE tasks SET (
+	userId,
+	pictureUrl,
+	recognizedText,
+	recognizedLang,
+	checkedText,
+	translatedText,
+	translatedLang,
+	error) = ($1, $2, $3, $4, $5, $6, $7, $8)`
+
+func (mgr *dbmanager) UpdateData(d *Data) error {
+	_, err := mgr.db.Exec(updateStatment, d.UserId, d.PictureUrl,
+		d.RecognizedText, d.RecognizedLang, d.CheckedText,
+		d.TranslatedText, d.TranslatedLang, d.Error)
+	if err != nil {
+		log.Println("can't update data: ", err)
 		return err
 	}
 	return err
