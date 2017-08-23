@@ -1,27 +1,30 @@
 package main
 
 import (
-	//"./aitserver"
-	//"log"
-	"./executor"
-	"log"
+	"context"
+
+	"github.com/ValeriyKnyazhev/translator/aitserver"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
-	log.Fatal(executor.RunHTTPServer(":8081"))
+	//testingDB()
+	logger, err := CreateLogger()
+	if err != nil {
+		log.Panic("Could not create logging facility", err)
+	}
+	ctx := context.Background()
+	ctx = context.WithValue(ctx, "logger", logger)
+	testServer := aitserver.NewServer()
 
-	//testServer := aitserver.NewServer()
-	//
-	//err := testServer.InitServer("", "2345")
-	//if err != nil {
-	//	log.Fatal("[MAIN] Init Server Error:", err)
-	//}
-	//
-	//err = testServer.StartServer()
-	//
-	//
-	//if err != nil {
-	//	log.Fatal("[MAIN] Start server Error:", err)
-	//}
+	err = testServer.InitServer("", "2345", ctx)
+	if err != nil {
+		logger.Panic("[MAIN] Init Server Error:", err)
+	}
 
+	err = testServer.StartServer()
+
+	if err != nil {
+		logger.Panic("[MAIN] Start server Error:", err)
+	}
 }
