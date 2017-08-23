@@ -6,7 +6,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
-        "net/url"
+	"net/url"
 )
 
 type WordArray struct {
@@ -134,7 +134,7 @@ type Vision struct {
 	Client    *http.Client
 }
 
-func CreateVisoin(serverUrl string, apiKey string) Vision {
+func CreateVision(serverUrl string, apiKey string) Vision {
 	return Vision{serverUrl, apiKey, &http.Client{}}
 }
 
@@ -143,13 +143,13 @@ func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType ui
 	urlV := url.Values{}
 	urlV.Set("subscription-key", imgt.ApiKey)
 
-        imgT = ImgText{}
+	imgT = ImgText{}
 
 	var requestMethod string
 	var responseParseFunction func([]byte, *ImgText) error
 
 	if recImgType == OcrImgType {
-                urlV.Set("lang", lang)
+		urlV.Set("lang", lang)
 		urlV.Set("detectOrientation", "true")
 		requestMethod = "ocr"
 		responseParseFunction = getOcrImgText
@@ -173,7 +173,7 @@ func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType ui
 	var contentTypeRequest string
 
 	if pathType == FullPathType {
-                var imgData []byte
+		var imgData []byte
 		imgData, err = ioutil.ReadFile(imgPath)
 		if err != nil {
 			return
@@ -181,7 +181,7 @@ func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType ui
 		dataBuff = bytes.NewBuffer(imgData)
 		contentTypeRequest = "application/octet-stream"
 	} else if pathType == UrlPathType {
-                var imgUrl *url.URL
+		var imgUrl *url.URL
 		imgUrl, err = url.ParseRequestURI(imgPath)
 		if err != nil {
 			return

@@ -3,10 +3,11 @@ package database
 import (
 	"database/sql"
 	"fmt"
-	"github.com/ValeriyKnyazhev/translator/configuration"
-	_ "github.com/lib/pq"
 	"log"
 	"time"
+
+	"github.com/ValeriyKnyazhev/translator/configuration"
+	_ "github.com/lib/pq"
 )
 
 type DBManager interface {
@@ -20,10 +21,8 @@ type dbmanager struct {
 	db *sql.DB
 }
 
-var Manager DBManager
-
-func init() {
-	dbconfig, err := configuration.ReadDBConfig()
+func CreateFromConfig(path string) DBManager {
+	dbconfig, err := configuration.ReadDBConfig(path)
 	if err != nil {
 		log.Fatal("Error: Can't read database config")
 	}
@@ -32,13 +31,13 @@ func init() {
 		dbconfig.Host, dbconfig.Port, dbconfig.User, dbconfig.Password, dbconfig.DBname)
 	db, err := sql.Open("postgres", psqlInfo)
 	if err != nil {
-		log.Fatal("Error: The data source arguments are not valid")
+		log.Fatal("Error: The data source arguments are not valid: ", err)
 	}
 	err = db.Ping()
 	if err != nil {
-		log.Fatal("Error: Could not establish a connection with the database")
+		log.Fatal("Error: Could not establish a connection with the database: ", err)
 	}
-	Manager = &dbmanager{db: db}
+	return &dbmanager{db: db}
 }
 
 var createTableStatment string = `

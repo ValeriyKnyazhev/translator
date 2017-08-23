@@ -1,12 +1,17 @@
 package aitserver
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"net"
+
+	log "github.com/sirupsen/logrus"
+
 	"github.com/ValeriyKnyazhev/translator/configuration"
 	"github.com/ValeriyKnyazhev/translator/grammar"
 	"github.com/ValeriyKnyazhev/translator/translator"
 	"github.com/ValeriyKnyazhev/translator/vision"
-	"net"
 )
 
 type AitServer struct {
@@ -22,16 +27,18 @@ func NewServer() AitServer {
 	return AitServer{&configuration.Config{}, vision.Vision{}, grammar.GrammarChecker{}, translator.Translator{}, "", ""}
 }
 
-func (servConf *AitServer) InitServer(host string, port string) (err error) {
+func (servConf *AitServer) InitServer(host string, port string, ctx context.Context) (err error) {
 	servConf.Host = host
 	servConf.Port = port
-
-	servConf.ServerConfig, err = configuration.ReadConfig()
+	servConf.ServerConfig, err = configuration.ReadConfigDefault()
 	if err != nil {
 		return
 	}
-
-	servConf.ServerVision = vision.CreateVisoin(
+	logger := ctx.Value("logger").(*log.Logger)
+	if logger == nil {
+		return errors.New("Logger is nil")
+	}
+	servConf.ServerVision = vision.CreateVision(
 		servConf.ServerConfig.VisionServerUrl,
 		servConf.ServerConfig.VisionApiKey)
 
@@ -43,7 +50,7 @@ func (servConf *AitServer) InitServer(host string, port string) (err error) {
 		servConf.ServerConfig.TranslatorServerUrl,
 		servConf.ServerConfig.TranslatorResourceUrl,
 		servConf.ServerConfig.TranslatorApiKey)
-
+	logger.Info("Server initialized!")
 	return
 }
 
