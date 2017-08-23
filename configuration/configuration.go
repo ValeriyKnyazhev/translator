@@ -47,12 +47,12 @@ func read(config interface{}, path string) (interface{}, error) {
 }
 
 func ReadConfig(path string) (*Config, error) {
-	conf, err := read(&DBConfig{}, path) // "./resources/config.yaml"
+	conf, err := read(&Config{}, path) // "./resources/config.yaml"
 	return conf.(*Config), err
 }
 
 func ReadConfigDefault() (*Config, error) {
-	conf, err := read(&DBConfig{}, "./resources/config.yaml")
+	conf, err := read(&Config{}, "./resources/config.yaml")
 	return conf.(*Config), err
 }
 
