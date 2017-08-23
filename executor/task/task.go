@@ -6,6 +6,7 @@ type RecognizeTask struct {
 	RequestId  int
 	Wg         sync.WaitGroup
 	PictureUrl string
+	LangFrom   string
 	LangTo     string
 }
 

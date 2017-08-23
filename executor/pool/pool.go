@@ -6,6 +6,7 @@ import (
 	"github.com/ValeriyKnyazhev/translator/grammar"
 	"github.com/ValeriyKnyazhev/translator/translator"
 	"github.com/ValeriyKnyazhev/translator/vision"
+	"log"
 	"sync"
 	"time"
 )
@@ -68,11 +69,12 @@ func (p *TaskPool) Stop() {
 	p.wgTranslate.Wait()
 }
 
-func (p *TaskPool) AddRecognizeTask(requestId int, pictureUrl string, langTo string) (string, error) {
+func (p *TaskPool) AddRecognizeTask(requestId int, pictureUrl string, langFrom string, langTo string) (string, error) {
 	t := task.RecognizeTask{
 		RequestId:  requestId,
 		Wg:         sync.WaitGroup{},
 		PictureUrl: pictureUrl,
+		LangFrom:   langFrom,
 		LangTo:     langTo,
 	}
 
@@ -106,7 +108,7 @@ func (p *TaskPool) AddCheckTask(requestId int, text string, langFrom string, lan
 	}
 
 	t.Wg.Wait()
-	return "Recognize task has been successfully added", nil
+	return "Check grammatics task has been successfully added", nil
 }
 
 func (p *TaskPool) AddTranslateTask(requestId int, text string, langFrom string, langTo string) (string, error) {
@@ -127,21 +129,33 @@ func (p *TaskPool) AddTranslateTask(requestId int, text string, langFrom string,
 	}
 
 	t.Wg.Wait()
-	return "Recognize task has been successfully added", nil
+	return "Translate task has been successfully added", nil
 }
 
 func (p *TaskPool) recognize() {
 	for t := range p.recognizeChan {
-		p.recognizer.GetTextFromImg(t.PictureUrl, vision.UrlPathType, vision.OcrImgType, "en")
+		text, err := p.recognizer.GetTextFromImg(t.PictureUrl, vision.UrlPathType, vision.OcrImgType, "en")
 		t.Wg.Done()
+		if err == nil {
+			p.AddCheckTask(t.RequestId, text.Text, t.LangFrom, t.LangTo)
+			//TODO update field recognizedText in db
+		} else {
+			//TODO add update entity in db with error
+		}
 	}
 	p.wgRecognize.Done()
 }
 
 func (p *TaskPool) check() {
 	for t := range p.checkChan {
-		p.checker.CheckPhrase(t.RecognizedText)
+		text, err := p.checker.CheckPhrase(t.RecognizedText)
 		t.Wg.Done()
+		if err == nil {
+			p.AddTranslateTask(t.RequestId, text, t.LangFrom, t.LangTo)
+			//TODO update field checkedText in db
+		} else {
+			//TODO add update entity in db with error
+		}
 	}
 	p.wgCheck.Done()
 }
@@ -149,8 +163,14 @@ func (p *TaskPool) check() {
 func (p *TaskPool) translate() {
 	for t := range p.translateChan {
 		lang := t.LangFrom + "-" + t.LangTo
-		p.interpreter.Translate(lang, t.CheckedText)
+		text, err := p.interpreter.Translate(lang, t.CheckedText)
 		t.Wg.Done()
+		if err == nil {
+			log.Println("Translated text: %s", text.Text)
+			//TODO update field translatedText in db
+		} else {
+			//TODO add update entity in db with error
+		}
 	}
 	p.wgTranslate.Done()
 }
