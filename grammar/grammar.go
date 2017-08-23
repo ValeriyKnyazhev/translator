@@ -62,8 +62,8 @@ func (gChecker *GrammarChecker) CheckPhrase(text string, options ...int) (string
 	err = json.Unmarshal(body, &words)
 	if err != nil {
 		fmt.Println("unable to get phrase from response:", err)
+		return "", err
 	}
-
 	text = replaceWords(text, words)
 	dumpInfo(words)
 	return text, err
@@ -71,7 +71,7 @@ func (gChecker *GrammarChecker) CheckPhrase(text string, options ...int) (string
 
 func replaceWords(text string, words []Word) string {
 	for _, word := range words {
-		if len(word.S[0]) > 0 {
+		if len(word.S) > 0 {
 			text = strings.Replace(text, word.Word, word.S[0], 1)
 		}
 	}
@@ -80,9 +80,9 @@ func replaceWords(text string, words []Word) string {
 
 func dumpInfo(words []Word) {
 	log.Println("------------------------------------")
-	log.Println("Следующие слова были изменены:\n")
+	log.Println("Следующие слова были изменены:")
 	for _, word := range words {
-		if len(word.S[0]) > 0 {
+		if len(word.S) > 0 {
 			log.Println(word.Word, " -> ", word.S[0])
 		}
 	}

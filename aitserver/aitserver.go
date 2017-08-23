@@ -1,11 +1,11 @@
 package aitserver
 
 import (
-	"../configuration"
-	"../grammar"
-	"../translator"
-	"../vision"
 	"fmt"
+	"github.com/ValeriyKnyazhev/translator/configuration"
+	"github.com/ValeriyKnyazhev/translator/grammar"
+	"github.com/ValeriyKnyazhev/translator/translator"
+	"github.com/ValeriyKnyazhev/translator/vision"
 	"net"
 )
 
@@ -44,7 +44,7 @@ func (servConf *AitServer) InitServer(host string, port string) (err error) {
 		servConf.ServerConfig.TranslatorResourceUrl,
 		servConf.ServerConfig.TranslatorApiKey)
 
-        return
+	return
 }
 
 func (servConf *AitServer) StartServer() (err error) {
@@ -75,9 +75,9 @@ func (servConf AitServer) connectionHandler(connect net.Conn) (err error) {
 	for bitNum, err = connect.Read(textBuff); bitNum > 0; bitNum, err = connect.Read(textBuff) {
 		var itArr int
 
-                if err != nil {
-                    return
-                }
+		if err != nil {
+			return
+		}
 
 		for itArr = 0; itArr < bitNum; itArr++ {
 			if textBuff[itArr] == '\n' {
@@ -90,18 +90,18 @@ func (servConf AitServer) connectionHandler(connect net.Conn) (err error) {
 		}
 	}
 
-        fmt.Println(reqStr)
+	fmt.Println(reqStr)
 
 	imgDes, err := servConf.ServerVision.GetTextFromImg("http://5klass.net/datas/russkij-jazyk/Prichastie-10-klass/0008-008-Rabota-s-tekstom-variant-A-zadanie-v-kakoj-posledovatelnosti.jpg", vision.UrlPathType, vision.OcrImgType, "en")
 
 	if err != nil {
 
-        fmt.Println(err)
+		fmt.Println(err)
 
 		return
 	}
 
-        fmt.Println(imgDes.Text)
+	fmt.Println(imgDes.Text)
 
 	textGram, err := servConf.ServerGrammar.CheckPhrase(imgDes.Text)
 	if err != nil {
@@ -115,5 +115,5 @@ func (servConf AitServer) connectionHandler(connect net.Conn) (err error) {
 
 	connect.Write([]byte(translation.Text[0]))
 
-        return
+	return
 }
