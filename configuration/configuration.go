@@ -2,9 +2,10 @@ package configuration
 
 import (
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/go-yaml/yaml"
 )
 
 type Config struct {
@@ -26,8 +27,8 @@ type DBConfig struct {
 	DBname   string `yaml:"dbname"`
 }
 
-func ReadConfig() (*Config, error) {
-	filename, err := filepath.Abs("./resources/config.yaml")
+func read(config interface{}, path string) (interface{}, error) {
+	filename, err := filepath.Abs(path)
 	if err != nil {
 		fmt.Println("unable to find absolute configuration file path:", err)
 		return nil, err
@@ -37,35 +38,30 @@ func ReadConfig() (*Config, error) {
 		fmt.Println("unable to read configuration file:", err)
 		return nil, err
 	}
-
-	config := Config{}
-	err = yaml.Unmarshal(configFile, &config)
+	err = yaml.Unmarshal(configFile, config)
 	if err != nil {
 		fmt.Println("unable to unmarshal yaml:", err)
 		return nil, err
 	}
-
-	return &config, err
+	return config, nil
 }
 
-func ReadDBConfig() (*DBConfig, error) {
-	filename, err := filepath.Abs("./resources/dbconfig.yaml")
-	if err != nil {
-		fmt.Println("unable to find absolute configuration file path:", err)
-		return nil, err
-	}
-	configFile, err := ioutil.ReadFile(filename)
-	if err != nil {
-		fmt.Println("unable to read configuration file:", err)
-		return nil, err
-	}
+func ReadConfig(path string) (*Config, error) {
+	conf, err := read(&DBConfig{}, path) // "./resources/config.yaml"
+	return conf.(*Config), err
+}
 
-	config := DBConfig{}
-	err = yaml.Unmarshal(configFile, &config)
-	if err != nil {
-		fmt.Println("unable to unmarshal yaml:", err)
-		return nil, err
-	}
+func ReadConfigDefault() (*Config, error) {
+	conf, err := read(&DBConfig{}, "./resources/config.yaml")
+	return conf.(*Config), err
+}
 
-	return &config, err
+func ReadDBConfig(path string) (*DBConfig, error) {
+	conf, err := read(&DBConfig{}, path) // "./resources/dbconfig.yaml"
+	return conf.(*DBConfig), err
+}
+
+func ReadDBConfigDefault() (*DBConfig, error) {
+	conf, err := read(&DBConfig{}, "./resources/dbconfig.yaml")
+	return conf.(*DBConfig), err
 }
