@@ -1,14 +1,16 @@
 package pool
 
 import (
+	"../../database"
+	"../../grammar"
+	"../../translator"
+	"../../vision"
 	"../task"
 	"errors"
-	"github.com/ValeriyKnyazhev/translator/grammar"
-	"github.com/ValeriyKnyazhev/translator/translator"
-	"github.com/ValeriyKnyazhev/translator/vision"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
+	"fmt"
 )
 
 const timeout time.Duration = time.Second * 2
@@ -28,6 +30,7 @@ type TaskPool struct {
 	recognizer    vision.Vision
 	checker       grammar.GrammarChecker
 	interpreter   translator.Translator
+	base          *database.Dbmanager
 }
 
 func (p *TaskPool) Size() int {
@@ -37,7 +40,7 @@ func (p *TaskPool) Size() int {
 func NewTaskPool(concurrency int,
 	recognizer vision.Vision,
 	checker grammar.GrammarChecker,
-	interpreter translator.Translator) *TaskPool {
+	interpreter translator.Translator, base *database.Dbmanager) *TaskPool {
 	return &TaskPool{
 		concurrency:   concurrency,
 		recognizeChan: make(chan *task.RecognizeTask),
@@ -46,6 +49,7 @@ func NewTaskPool(concurrency int,
 		recognizer:    recognizer,
 		checker:       checker,
 		interpreter:   interpreter,
+		base:          base,
 	}
 }
 
@@ -69,7 +73,7 @@ func (p *TaskPool) Stop() {
 	p.wgTranslate.Wait()
 }
 
-func (p *TaskPool) AddRecognizeTask(requestId int, pictureUrl string, langFrom string, langTo string) (string, error) {
+func (p *TaskPool) AddRecognizeTask(requestId string, pictureUrl string, langFrom string, langTo string) (string, error) {
 	t := task.RecognizeTask{
 		RequestId:  requestId,
 		Wg:         sync.WaitGroup{},
@@ -90,7 +94,7 @@ func (p *TaskPool) AddRecognizeTask(requestId int, pictureUrl string, langFrom s
 	return "Recognize task has been successfully added", nil
 }
 
-func (p *TaskPool) AddCheckTask(requestId int, text string, langFrom string, langTo string) (string, error) {
+func (p *TaskPool) AddCheckTask(requestId string, text string, langFrom string, langTo string) (string, error) {
 	t := task.GrammarCheckTask{
 		RequestId:      requestId,
 		Wg:             sync.WaitGroup{},
@@ -111,7 +115,7 @@ func (p *TaskPool) AddCheckTask(requestId int, text string, langFrom string, lan
 	return "Check grammatics task has been successfully added", nil
 }
 
-func (p *TaskPool) AddTranslateTask(requestId int, text string, langFrom string, langTo string) (string, error) {
+func (p *TaskPool) AddTranslateTask(requestId string, text string, langFrom string, langTo string) (string, error) {
 	t := task.TranslateTask{
 		RequestId:   requestId,
 		Wg:          sync.WaitGroup{},
@@ -134,13 +138,32 @@ func (p *TaskPool) AddTranslateTask(requestId int, text string, langFrom string,
 
 func (p *TaskPool) recognize() {
 	for t := range p.recognizeChan {
-		text, err := p.recognizer.GetTextFromImg(t.PictureUrl, vision.UrlPathType, vision.OcrImgType, "en")
+		dbData, err := p.base.GetData(t.RequestId)
+		if err != nil {
+			log.Println(err)
+		}
+
+		text, err := p.recognizer.GetTextFromImg(t.PictureUrl, "en")
 		t.Wg.Done()
+
 		if err == nil {
-			p.AddCheckTask(t.RequestId, text.Text, t.LangFrom, t.LangTo)
-			//TODO update field recognizedText in db
+			dbData.CurrTaskId = 2
+			dbData.RecognizedText = text.Text
+			dbData.Status = database.TaskStatusRun
+			dbData.Error = database.TaskErrNone
+			err = p.base.UpdateData(dbData)
+			if err != nil {
+				log.Println(err)
+			} else {
+				p.AddCheckTask(t.RequestId, text.Text, t.LangFrom, t.LangTo)
+			}
 		} else {
-			//TODO add update entity in db with error
+			dbData.Status = database.TaskStatusStop
+			dbData.Error = err.Error()
+			err = p.base.UpdateData(dbData)
+			if err != nil {
+				log.Println(err)
+			}
 		}
 	}
 	p.wgRecognize.Done()
@@ -148,13 +171,33 @@ func (p *TaskPool) recognize() {
 
 func (p *TaskPool) check() {
 	for t := range p.checkChan {
+		dbData, err := p.base.GetData(t.RequestId)
+		if err != nil {
+			log.Println(err)
+		}
+
 		text, err := p.checker.CheckPhrase(t.RecognizedText)
 		t.Wg.Done()
 		if err == nil {
-			p.AddTranslateTask(t.RequestId, text, t.LangFrom, t.LangTo)
-			//TODO update field checkedText in db
+			dbData.CurrTaskId = 3
+			dbData.CheckedText = text
+			dbData.Status = database.TaskStatusRun
+			dbData.Error = database.TaskErrNone
+			err = p.base.UpdateData(dbData)
+			if err != nil {
+				log.Println(err)
+			} else {
+
+				p.AddTranslateTask(t.RequestId, text, t.LangFrom, t.LangTo)
+			}
 		} else {
-			//TODO add update entity in db with error
+			dbData.Status = database.TaskStatusStop
+			dbData.Error = err.Error()
+			err = p.base.UpdateData(dbData)
+			if err != nil {
+				log.Println(err)
+			}
+
 		}
 	}
 	p.wgCheck.Done()
@@ -162,14 +205,30 @@ func (p *TaskPool) check() {
 
 func (p *TaskPool) translate() {
 	for t := range p.translateChan {
+		dbData, err := p.base.GetData(t.RequestId)
+		if err != nil {
+			log.Println(err)
+		}
+
 		lang := t.LangFrom + "-" + t.LangTo
 		text, err := p.interpreter.Translate(lang, t.CheckedText)
 		t.Wg.Done()
 		if err == nil {
 			log.Println("Translated text: %s", text.Text)
-			//TODO update field translatedText in db
+			dbData.TranslatedText = fmt.Sprintf("%s", text.Text)
+			dbData.Status = database.TaskStatusComplete
+			dbData.Error = database.TaskErrNone
+			err = p.base.UpdateData(dbData)
+			if err != nil {
+				log.Println(err)
+			}
 		} else {
-			//TODO add update entity in db with error
+			dbData.Status = database.TaskStatusStop
+			dbData.Error = err.Error()
+			err = p.base.UpdateData(dbData)
+			if err != nil {
+				log.Println(err)
+			}
 		}
 	}
 	p.wgTranslate.Done()

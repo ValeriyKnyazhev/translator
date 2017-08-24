@@ -10,7 +10,7 @@ api:
 server:
         httpServerHost: localhost  
         httpServerPort: 2345
-        httpServerLogFle: httpServerLog.log
+        httpServerLogFile: httpServerLog.log
 db:
         host: localhost
         port: 5432

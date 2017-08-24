@@ -3,7 +3,7 @@ package task
 import "sync"
 
 type RecognizeTask struct {
-	RequestId  int
+	RequestId  string
 	Wg         sync.WaitGroup
 	PictureUrl string
 	LangFrom   string
@@ -11,7 +11,7 @@ type RecognizeTask struct {
 }
 
 type GrammarCheckTask struct {
-	RequestId      int
+	RequestId      string
 	Wg             sync.WaitGroup
 	RecognizedText string
 	LangFrom       string
@@ -19,7 +19,7 @@ type GrammarCheckTask struct {
 }
 
 type TranslateTask struct {
-	RequestId   int
+	RequestId   string
 	Wg          sync.WaitGroup
 	CheckedText string
 	LangFrom    string
