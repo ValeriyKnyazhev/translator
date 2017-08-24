@@ -99,7 +99,7 @@ type Vision struct {
 	Client    *http.Client
 }
 
-func CreateVisoin(serverUrl string, apiKey string) Vision {
+func CreateVision(serverUrl string, apiKey string) Vision {
 	return Vision{serverUrl, apiKey, &http.Client{}}
 }
 

@@ -18,3 +18,10 @@
 
 # config
 resources/config.yaml
+resources/dbconfig.yaml
+
+#vscode is fine too!
+.vscode/
+
+#go binaries without .exe suffixes (go install, go test and such)
+debug

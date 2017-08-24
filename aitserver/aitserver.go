@@ -85,8 +85,11 @@ func (servConf *AitHTTPServer) initServer() error {
 		log.Println("Init server Error: ", err)
 		return err
 	}
-
-	servConf.ServerVision = vision.CreateVisoin(
+	logger := ctx.Value("logger").(*log.Logger)
+	if logger == nil {
+		return errors.New("Logger is nil")
+	}
+	servConf.ServerVision = vision.CreateVision(
 		servConf.ServerConfig.VisionServerUrl,
 		servConf.ServerConfig.VisionApiKey)
 

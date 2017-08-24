@@ -1,8 +1,10 @@
 package main
 
 import (
-	"./aitserver"
-	"log"
+	"context"
+
+	"github.com/ValeriyKnyazhev/translator/aitserver"
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
@@ -13,5 +15,4 @@ func main() {
 	if err != nil {
 		log.Println("[MAIN] Init Server Error:", err)
 	}
-
 }
