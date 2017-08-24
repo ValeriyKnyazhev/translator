@@ -3,6 +3,7 @@ package aitserver
 import (
 	"../configuration"
 	"../database"
+	"../executor"
 	"../grammar"
 	"../translator"
 	"../vision"
@@ -52,25 +53,27 @@ func (logServ *aitServerLog) closeLogger() error {
 }
 
 type AitHTTPServer struct {
-	ServerConfig  *configuration.Config
-	ServerVision  vision.Vision
-	ServerGrammar grammar.GrammarChecker
-	ServerTrans   translator.Translator
-	DataBase      *database.Dbmanager
-	ServerHost    string
-	ServerPort    string
-	ServerLogger  *aitServerLog
+	ServerConfig   *configuration.Config
+	ServerVision   vision.Vision
+	ServerGrammar  grammar.GrammarChecker
+	ServerTrans    translator.Translator
+	DataBase       *database.Dbmanager
+	ServerExecutor *executor.Executor
+	ServerHost     string
+	ServerPort     string
+	ServerLogger   *aitServerLog
 }
 
 func NewHTTPServer() *AitHTTPServer {
 	return &AitHTTPServer{ServerConfig: &configuration.Config{},
-		ServerVision:  vision.Vision{},
-		ServerGrammar: grammar.GrammarChecker{},
-		ServerTrans:   translator.Translator{},
-		DataBase:      &database.Dbmanager{},
-		ServerHost:    "",
-		ServerPort:    "",
-		ServerLogger:  &aitServerLog{}}
+		ServerVision:   vision.Vision{},
+		ServerGrammar:  grammar.GrammarChecker{},
+		ServerTrans:    translator.Translator{},
+		DataBase:       &database.Dbmanager{},
+		ServerExecutor: &executor.Executor{},
+		ServerHost:     "",
+		ServerPort:     "",
+		ServerLogger:   &aitServerLog{}}
 }
 
 func (servConf *AitHTTPServer) initServer() error {
@@ -122,6 +125,10 @@ func (servConf *AitHTTPServer) initServer() error {
 	servConf.ServerHost = servConf.ServerConfig.Server.HTTPServerHost
 	servConf.ServerPort = servConf.ServerConfig.Server.HTTPServerPort
 
+	servConf.ServerExecutor = executor.CreateExecutor(servConf.ServerVision,
+		servConf.ServerGrammar,
+		servConf.ServerTrans,
+		servConf.DataBase)
 	return nil
 }
 
@@ -294,11 +301,8 @@ func (servConf AitHTTPServer) CreatNewTranslationTask(w http.ResponseWriter, req
 				Info: fmt.Sprint("can't set data to database", err)})
 		return
 	}
-	/*
 
-	   Start New Task
-
-	*/
+	servConf.ServerExecutor.AddRecognizeTask(fmt.Sprintf("%s", uuid), pathToImg, langFrom, langTo)
 	servConf.makeResponse(w, http.StatusAccepted, serverAcceptedResponse{Info: "For future translation use request Id", Id: fmt.Sprintf("%s", uuid)})
 
 }
@@ -337,13 +341,9 @@ func (servConf AitHTTPServer) GetTranslationResult(w http.ResponseWriter, req *h
 			Text:   dbData.TranslatedText})
 		return
 	} else if dbData.Status == database.TaskStatusStop || currentTime >= 5.0 {
-		updateData := database.Data{Id: dbData.Id,
-			UserId: 1, CurrTaskId: dbData.CurrTaskId, PictureUrl: dbData.PictureUrl, RecognizedText: dbData.RecognizedText,
-			RecognizedLang: dbData.RecognizedLang, CheckedText: dbData.CheckedText,
-			TranslatedText: dbData.TranslatedText, TranslatedLang: dbData.TranslatedLang, Status: database.TaskStatusRun,
-			Error: database.TaskErrNone}
-
-		err = servConf.DataBase.UpdateData(&updateData)
+		dbData.Status = database.TaskStatusRun
+		dbData.Error = database.TaskErrNone
+		err = servConf.DataBase.UpdateData(dbData)
 		if err != nil {
 			servConf.ServerLogger.logObj.Println(err)
 			servConf.makeResponse(w, http.StatusInternalServerError,
@@ -351,9 +351,23 @@ func (servConf AitHTTPServer) GetTranslationResult(w http.ResponseWriter, req *h
 					Info: fmt.Sprint(err)})
 			return
 		}
-		/*
-		   restart task
-		*/
+		switch dbData.CurrTaskId {
+		case 1:
+			servConf.ServerExecutor.AddRecognizeTask(dbData.Id, dbData.PictureUrl, dbData.RecognizedLang, dbData.TranslatedLang)
+			break
+		case 2:
+			servConf.ServerExecutor.AddCheckTask(dbData.Id, dbData.RecognizedText, dbData.RecognizedLang, dbData.TranslatedLang)
+			break
+		case 3:
+			servConf.ServerExecutor.AddTranslateTask(dbData.Id, dbData.CheckedText, dbData.RecognizedLang, dbData.TranslatedLang)
+			break
+		default:
+			servConf.makeResponse(w, http.StatusInternalServerError,
+				serverErrorResponse{Code: http.StatusText(http.StatusInternalServerError),
+					Info: "Invalide CurrTaskId!"})
+			return
+
+		}
 		servConf.makeResponse(w, http.StatusAccepted, serverAcceptedResponse{Info: "For future translation use request Id", Id: dbData.Id})
 		return
 	}
