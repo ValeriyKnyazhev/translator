@@ -2,6 +2,7 @@ package aitserver
 
 import (
 	"../configuration"
+	"../database"
 	"../grammar"
 	"../translator"
 	"../vision"
@@ -17,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 type aitServerLog struct {
@@ -54,56 +56,71 @@ type AitHTTPServer struct {
 	ServerVision  vision.Vision
 	ServerGrammar grammar.GrammarChecker
 	ServerTrans   translator.Translator
+	DataBase      *database.Dbmanager
 	ServerHost    string
 	ServerPort    string
 	ServerLogger  *aitServerLog
 }
 
 func NewHTTPServer() *AitHTTPServer {
-	return &AitHTTPServer{&configuration.Config{},
-		vision.Vision{},
-		grammar.GrammarChecker{},
-		translator.Translator{},
-		"",
-		"",
-		&aitServerLog{}}
+	return &AitHTTPServer{ServerConfig: &configuration.Config{},
+		ServerVision:  vision.Vision{},
+		ServerGrammar: grammar.GrammarChecker{},
+		ServerTrans:   translator.Translator{},
+		DataBase:      &database.Dbmanager{},
+		ServerHost:    "",
+		ServerPort:    "",
+		ServerLogger:  &aitServerLog{}}
 }
 
 func (servConf *AitHTTPServer) initServer() error {
 
 	var err error
-	servConf.ServerConfig, err = configuration.ReadConfig()
+	servConf.ServerConfig, err = configuration.ReadConfigDefault()
 	if err != nil {
 		log.Println("Init server Error: ", err)
 		return err
 	}
 
-	servConf.ServerLogger = newLogger(servConf.ServerConfig.HTTPServerLogFile)
+	servConf.ServerLogger = newLogger(servConf.ServerConfig.Server.HTTPServerLogFile)
 
 	err = servConf.ServerLogger.creatLogger()
 	if err != nil {
 		log.Println("Init server Error: ", err)
 		return err
 	}
-	logger := ctx.Value("logger").(*log.Logger)
-	if logger == nil {
-		return errors.New("Logger is nil")
+
+	servConf.DataBase, err = database.CreateDB(servConf.ServerConfig.DB.Host,
+		servConf.ServerConfig.DB.Port,
+		servConf.ServerConfig.DB.User,
+		servConf.ServerConfig.DB.Password,
+		servConf.ServerConfig.DB.DBname)
+
+	if err != nil {
+		log.Println("Init server Error: ", err)
+		return err
 	}
+
+	servConf.DataBase.CreateTable()
+	if err != nil {
+		servConf.ServerLogger.logObj.Println("Init server Error: ", err)
+	}
+
 	servConf.ServerVision = vision.CreateVision(
-		servConf.ServerConfig.VisionServerUrl,
-		servConf.ServerConfig.VisionApiKey)
+		servConf.ServerConfig.Api.VisionServerUrl,
+		servConf.ServerConfig.Api.VisionApiKey)
 
 	servConf.ServerGrammar = grammar.CreateGrammarChecker(
-		servConf.ServerConfig.GrammarServerUrl,
-		servConf.ServerConfig.GrammarResourceUrl)
+		servConf.ServerConfig.Api.GrammarServerUrl,
+		servConf.ServerConfig.Api.GrammarResourceUrl)
 
 	servConf.ServerTrans = translator.CreateTranslator(
-		servConf.ServerConfig.TranslatorServerUrl,
-		servConf.ServerConfig.TranslatorResourceUrl,
-		servConf.ServerConfig.TranslatorApiKey)
+		servConf.ServerConfig.Api.TranslatorServerUrl,
+		servConf.ServerConfig.Api.TranslatorResourceUrl,
+		servConf.ServerConfig.Api.TranslatorApiKey)
 
-	servConf.ServerHost = servConf.ServerConfig.HTTPServerHost
-	servConf.ServerPort = servConf.ServerConfig.HTTPServerPort
+	servConf.ServerHost = servConf.ServerConfig.Server.HTTPServerHost
+	servConf.ServerPort = servConf.ServerConfig.Server.HTTPServerPort
 
 	return nil
 }
@@ -263,26 +280,26 @@ func (servConf AitHTTPServer) CreatNewTranslationTask(w http.ResponseWriter, req
 		return
 	}
 
-	/*
-	   insert to DB
-	*/
+	insertedData := database.Data{Id: fmt.Sprintf("%s", uuid),
+		UserId: 1, CurrTaskId: 1, PictureUrl: pathToImg, RecognizedText: "",
+		RecognizedLang: langFrom, CheckedText: "",
+		TranslatedText: "", TranslatedLang: langTo, Status: database.TaskStatusRun,
+		Error: database.TaskErrNone}
 
-	/*
-
-	   Start Task
-
-	*/
-	//test { "pictureUrl": "https://www.w3.org/TR/SVGTiny12/examples/textArea01.png", "langFrom": "en", "langTo" : "ru" }
-	TEXT, err := servConf.ServerVision.GetTextFromImg(pathToImg, langFrom)
-
+	err = servConf.DataBase.SetData(&insertedData)
 	if err != nil {
-		servConf.makeResponse(w, http.StatusBadRequest,
-			serverErrorResponse{Code: http.StatusText(http.StatusBadRequest),
-				Info: fmt.Sprint(err)})
+		servConf.ServerLogger.logObj.Println(err)
+		servConf.makeResponse(w, http.StatusInternalServerError,
+			serverErrorResponse{Code: http.StatusText(http.StatusInternalServerError),
+				Info: fmt.Sprint("can't set data to database", err)})
 		return
 	}
-	servConf.makeResponse(w, http.StatusAccepted, serverAcceptedResponse{Info: TEXT.Text, Id: string(uuid[:])})
-	//	servConf.makeResponse(w, http.StatusAccepted, serverAcceptedResponse{Info: "For future translation use request Id", Id: string(uuid[:])})
+	/*
+
+	   Start New Task
+
+	*/
+	servConf.makeResponse(w, http.StatusAccepted, serverAcceptedResponse{Info: "For future translation use request Id", Id: fmt.Sprintf("%s", uuid)})
 
 }
 
@@ -298,27 +315,48 @@ func (servConf AitHTTPServer) GetTranslationResult(w http.ResponseWriter, req *h
 	params := mux.Vars(req)
 	taskID := params["id"]
 
-	/*
-	   insert to DB
-	*/
-	/* if not found
-		       servConf.ServerLogger.Println(<<err msg>>)
-	               makeResponse(w, http.StatusNotFound, &serverErrorResponse{Code: http.StatusText(http.StatusNotFound), Info: fmt.Sprint(<<err msg>>)})
-		       return
-		   else if task run or die
-		       if initTime > 5 (min)
-		          restart task
+	dbData, err := servConf.DataBase.GetData(taskID)
+	if err != nil {
+		servConf.makeResponse(w, http.StatusInternalServerError,
+			serverErrorResponse{Code: http.StatusText(http.StatusInternalServerError),
+				Info: fmt.Sprint(err)})
+		return
+	}
+	if dbData == nil {
+		servConf.makeResponse(w, http.StatusBadRequest,
+			serverErrorResponse{Code: http.StatusText(http.StatusBadRequest),
+				Info: "No rows were returned!"})
+		return
+	}
 
-		       servConf.ServerLogger.Println(<<err msg>>)
-		       makeResponse(w, http.StatusAccepted, &serverAcceptedResponse {Info: "For future translation use request Id", Id: taskID})
-		       return
+	currentTime := (dbData.Timestamp.Unix() - time.Now().Unix()) / 60.0
 
-		   else if task is complite
-		   makeResponse(w, http.StatusOK, &serverOKResponseForGet {LangFrom: "unk", LangTo: "unk", Text: "text"})
-		       return
-	*/
-	//test
-	servConf.makeResponse(w, http.StatusOK, serverOKResponseForGet{LangFrom: "unk", LangTo: "unk", Text: taskID})
+	if dbData.CurrTaskId == 3 && dbData.Status == database.TaskStatusComplete {
+		servConf.makeResponse(w, http.StatusOK, serverOKResponseForGet{LangFrom: dbData.RecognizedLang,
+			LangTo: dbData.TranslatedLang,
+			Text:   dbData.TranslatedText})
+		return
+	} else if dbData.Status == database.TaskStatusStop || currentTime >= 5.0 {
+		updateData := database.Data{Id: dbData.Id,
+			UserId: 1, CurrTaskId: dbData.CurrTaskId, PictureUrl: dbData.PictureUrl, RecognizedText: dbData.RecognizedText,
+			RecognizedLang: dbData.RecognizedLang, CheckedText: dbData.CheckedText,
+			TranslatedText: dbData.TranslatedText, TranslatedLang: dbData.TranslatedLang, Status: database.TaskStatusRun,
+			Error: database.TaskErrNone}
+
+		err = servConf.DataBase.UpdateData(&updateData)
+		if err != nil {
+			servConf.ServerLogger.logObj.Println(err)
+			servConf.makeResponse(w, http.StatusInternalServerError,
+				serverErrorResponse{Code: http.StatusText(http.StatusInternalServerError),
+					Info: fmt.Sprint(err)})
+			return
+		}
+		/*
+		   restart task
+		*/
+		servConf.makeResponse(w, http.StatusAccepted, serverAcceptedResponse{Info: "For future translation use request Id", Id: dbData.Id})
+		return
+	}
 
 }
 

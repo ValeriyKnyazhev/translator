@@ -1,9 +1,8 @@
 package main
 
 import (
-	"context"
 
-	"github.com/ValeriyKnyazhev/translator/aitserver"
+	"./aitserver"
 	log "github.com/sirupsen/logrus"
 )
 
