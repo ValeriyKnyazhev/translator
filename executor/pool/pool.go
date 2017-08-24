@@ -155,6 +155,12 @@ func (p *TaskPool) recognize() {
 			if err != nil {
 				log.Println(err)
 			} else {
+				log.WithFields(log.Fields{
+					"RequestId": t.RequestId,
+					"Text":      text.Text,
+					"LangFrom":  t.LangFrom,
+					"LangTo":    t.LangTo,
+				}).Info("Recognize success")
 				p.AddCheckTask(t.RequestId, text.Text, t.LangFrom, t.LangTo)
 			}
 		} else {
@@ -187,7 +193,12 @@ func (p *TaskPool) check() {
 			if err != nil {
 				log.Println(err)
 			} else {
-
+				log.WithFields(log.Fields{
+					"RequestId": t.RequestId,
+					"Text":      text,
+					"LangFrom":  t.LangFrom,
+					"LangTo":    t.LangTo,
+				}).Info("Gramma check success")
 				p.AddTranslateTask(t.RequestId, text, t.LangFrom, t.LangTo)
 			}
 		} else {
@@ -214,6 +225,10 @@ func (p *TaskPool) translate() {
 		text, err := p.interpreter.Translate(lang, t.CheckedText)
 		t.Wg.Done()
 		if err == nil {
+			log.WithFields(log.Fields{
+				"Lang": lang,
+				"Text": text,
+			}).Info("Translate success")
 			log.Println("Translated text: %s", text.Text)
 			dbData.TranslatedText = fmt.Sprintf("%s", text.Text)
 			dbData.Status = database.TaskStatusComplete
