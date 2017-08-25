@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type WordArray struct {
@@ -44,12 +46,13 @@ type ocrResponse struct {
 	Regions     []ocrRegions `json:"regions"`
 }
 
-func getOcrImgText(jsonBody []byte, imgtext *ImgText) (err error) {
+func getOcrImgText(jsonBody []byte, imgtext *ImgText) error {
 
 	var ocrResp ocrResponse
-	err = json.Unmarshal(jsonBody, &ocrResp)
+	err := json.Unmarshal(jsonBody, &ocrResp)
 	if err != nil {
-		return
+		log.Info(err)
+		return err
 	}
 
 	*imgtext = ImgText{}
@@ -69,64 +72,26 @@ func getOcrImgText(jsonBody []byte, imgtext *ImgText) (err error) {
 		}
 	}
 
-	return
+	return nil
 }
 
-type hwWords struct {
-	BoundingBox []int  `json:"boundingBox"`
-	Text        string `json:"text"`
+type ocrRespError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
-type hwLines struct {
-	BoundingBox []int     `json:"boundingBox"`
-	Text        string    `json:"text"`
-	Words       []hwWords `json:"words"`
-}
-
-type hwRecognitionResult struct {
-	Lines []hwLines `json:"lines"`
-}
-
-type hwResponse struct {
-	Status            string              `json:"status"`
-	Succeeded         bool                `json:"succeeded"`
-	Failed            bool                `json:"failed"`
-	Finished          bool                `json:"finished"`
-	RecognitionResult hwRecognitionResult `json:"recognitionResult"`
-}
-
-func getHwImgText(jsonBody []byte, imgtext *ImgText) (err error) {
-
-	var hwResp hwResponse
-	err = json.Unmarshal(jsonBody, &hwResp)
+func getVisionErrorMsg(jsonBody []byte) (string, error) {
+	var errResp ocrRespError
+	err := json.Unmarshal(jsonBody, &errResp)
 	if err != nil {
-		return
+		log.Info(err)
+		return "", err
 	}
 
-	*imgtext = ImgText{}
-	imgtext.Language = "en"
+	errMsg := "Vision Error: Error code: " + errResp.Code + " messege: " + errResp.Message
+	return errMsg, nil
 
-	for lIt, lHw := range hwResp.RecognitionResult.Lines {
-		for wIt, wHw := range lHw.Words {
-			imgtext.Words = append(imgtext.Words,
-				WordArray{Text: wHw.Text,
-					WordPosition:  wIt,
-					LineNumber:    lIt,
-					RegionsNumber: 0})
-			imgtext.Text += wHw.Text + " "
-		}
-		imgtext.Text += "\n"
-	}
-
-	return
 }
-
-const (
-	FullPathType uint8 = iota
-	UrlPathType
-	OcrImgType
-	HwImgType
-)
 
 type Vision struct {
 	ServerUrl string
@@ -138,83 +103,83 @@ func CreateVision(serverUrl string, apiKey string) Vision {
 	return Vision{serverUrl, apiKey, &http.Client{}}
 }
 
-func (imgt *Vision) GetTextFromImg(imgPath string, pathType uint8, recImgType uint8, lang string) (imgT ImgText, err error) {
+func (imgt *Vision) GetTextFromImg(imgPath string, lang string) (*ImgText, error) {
 
 	urlV := url.Values{}
 	urlV.Set("subscription-key", imgt.ApiKey)
 
-	imgT = ImgText{}
+	imgT := &ImgText{}
 
 	var requestMethod string
-	var responseParseFunction func([]byte, *ImgText) error
 
-	if recImgType == OcrImgType {
-		urlV.Set("lang", lang)
-		urlV.Set("detectOrientation", "true")
-		requestMethod = "ocr"
-		responseParseFunction = getOcrImgText
-	} else if recImgType == HwImgType {
-		urlV.Set("handwriting", "true")
-		requestMethod = "recognizeText"
-		responseParseFunction = getHwImgText
-	} else {
-		err = errors.New("invalide recImgType")
-		return
-	}
+	urlV.Set("lang", lang)
+	urlV.Set("detectOrientation", "true")
+	requestMethod = "ocr"
 
 	fullServerPath := imgt.ServerUrl + "/" + requestMethod
 
 	urlPath, err := url.ParseRequestURI(fullServerPath)
 	if err != nil {
-		return
+		log.Info(err)
+		return nil, err
 	}
 
 	var dataBuff *bytes.Buffer
 	var contentTypeRequest string
 
-	if pathType == FullPathType {
+	if strings.HasPrefix(imgPath, "file://") {
 		var imgData []byte
+		imgPath = strings.TrimPrefix(imgPath, "file://")
 		imgData, err = ioutil.ReadFile(imgPath)
 		if err != nil {
-			return
+			log.Info(err)
+			return nil, err
 		}
 		dataBuff = bytes.NewBuffer(imgData)
 		contentTypeRequest = "application/octet-stream"
-	} else if pathType == UrlPathType {
+	} else {
 		var imgUrl *url.URL
 		imgUrl, err = url.ParseRequestURI(imgPath)
 		if err != nil {
-			return
+			log.Info(err)
+			return nil, err
 		}
 		dataBuff = bytes.NewBufferString("{\"url\":" + "\"" + imgUrl.String() + "\"}")
 		contentTypeRequest = "application/json"
-	} else {
-		err = errors.New("invalide pathType")
-		return
 	}
 
 	urlPath.RawQuery = urlV.Encode()
 
 	visionResponse, err := imgt.Client.Post(urlPath.String(), contentTypeRequest, dataBuff)
 	if err != nil {
-		return
+		log.Info(err)
+		return nil, err
 	}
 	defer visionResponse.Body.Close()
 
-	if visionResponse.StatusCode != 200 {
-		err = errors.New("Vision response failed satus code: " + visionResponse.Status)
-		return
-	}
-
 	responseBody, err := ioutil.ReadAll(visionResponse.Body)
 	if err != nil {
-		return
+		log.Info(err)
+		return nil, err
 	}
 
-	err = responseParseFunction(responseBody, &imgT)
+	if visionResponse.StatusCode != 200 {
+		errMsg, err := getVisionErrorMsg(responseBody)
+		if err != nil {
+
+			log.Info(err)
+			return nil, err
+		}
+		err = errors.New(errMsg)
+		log.Info(err)
+		return nil, err
+	}
+
+	err = getOcrImgText(responseBody, imgT)
 	if err != nil {
-		return
+		log.Info(err)
+		return nil, err
 	}
 
-	return
+	return imgT, nil
 }
