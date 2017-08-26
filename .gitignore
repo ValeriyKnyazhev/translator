@@ -28,3 +28,6 @@ debug
 main
 
 *.log
+
+# remove build files
+[Bb]uild/
