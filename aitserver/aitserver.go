@@ -1,14 +1,14 @@
 package aitserver
 
 import (
-	"../configuration"
-	"../database"
-	"../executor"
-	"../grammar"
-	"../translator"
-	"../vision"
 	"encoding/json"
 	"fmt"
+	"github.com/ValeriyKnyazhev/translator/configuration"
+	"github.com/ValeriyKnyazhev/translator/database"
+	"github.com/ValeriyKnyazhev/translator/executor"
+	"github.com/ValeriyKnyazhev/translator/grammar"
+	"github.com/ValeriyKnyazhev/translator/translator"
+	"github.com/ValeriyKnyazhev/translator/vision"
 	"github.com/gorilla/mux"
 	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
@@ -36,6 +36,7 @@ func (logServ *aitServerLog) creatLogger() error {
 	var err error
 	logServ.logFile, err = os.OpenFile(logServ.logFileName, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
+		log.Println(logServ.logFileName)
 		log.Println("creat logger Error: ", err)
 		return err
 	}

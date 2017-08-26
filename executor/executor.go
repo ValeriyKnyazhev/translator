@@ -1,12 +1,12 @@
 package executor
 
 import (
-	"./pool"
+	"github.com/ValeriyKnyazhev/translator/executor/pool"
 
-	"../database"
-	"../grammar"
-	"../translator"
-	"../vision"
+	"github.com/ValeriyKnyazhev/translator/database"
+	"github.com/ValeriyKnyazhev/translator/grammar"
+	"github.com/ValeriyKnyazhev/translator/translator"
+	"github.com/ValeriyKnyazhev/translator/vision"
 )
 
 type IPool interface {

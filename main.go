@@ -1,8 +1,7 @@
 package main
 
 import (
-
-	"./aitserver"
+	"github.com/ValeriyKnyazhev/translator/aitserver"
 	log "github.com/sirupsen/logrus"
 )
 
