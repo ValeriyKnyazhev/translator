@@ -175,7 +175,7 @@ func (servConf AitHTTPServer) makeResponse(w http.ResponseWriter, code int, body
 
 func (servConf AitHTTPServer) CreatNewTranslationTask(w http.ResponseWriter, req *http.Request) {
 
-	log.Println("New connect with POST")
+	log.Println("New connect with CreatNewTranslation")
 	uuid := uuid.NewV4()
 
 	langFrom := req.Header.Get(HeaderLangFrom)
@@ -316,10 +316,13 @@ type serverOKResponseForGet struct {
 
 func (servConf AitHTTPServer) GetTranslationResult(w http.ResponseWriter, req *http.Request) {
 
-	log.Println("New connect for GET")
+	log.Println("New connect for GETTranslation")
 	params := mux.Vars(req)
-	taskID := params["id"]
+	taskID := params["taskId"]
+	userID := params["userId"]
 
+	log.Println(taskID)
+	log.Println(userID)
 	dbData, err := servConf.DataBase.GetData(taskID)
 	if err != nil {
 		servConf.makeResponse(w, http.StatusInternalServerError,
@@ -336,7 +339,7 @@ func (servConf AitHTTPServer) GetTranslationResult(w http.ResponseWriter, req *h
 
 	currentTime := (dbData.Timestamp.Unix() - time.Now().Unix()) / 60.0
 
-        log.Println(currentTime)
+	log.Println(currentTime)
 
 	if dbData.CurrTaskId == 3 && dbData.Status == database.TaskStatusComplete {
 		servConf.makeResponse(w, http.StatusOK, serverOKResponseForGet{LangFrom: dbData.RecognizedLang,
@@ -377,6 +380,69 @@ func (servConf AitHTTPServer) GetTranslationResult(w http.ResponseWriter, req *h
 
 }
 
+type PostSignUpUser struct {
+	FirstName string `json:"firstname"`
+	LastName  string `json:"lastname"`
+	Email     string `json:"email"`
+}
+
+type SignUpUserRespOk struct {
+	UserId int64 `json:"userId"`
+}
+
+func (servConf AitHTTPServer) SignUpUser(w http.ResponseWriter, req *http.Request) {
+
+	log.Println("New connect for SignUpUser")
+
+	contType := req.Header.Get(HeaderContType)
+
+	if contType == "" {
+		servConf.makeResponse(w, http.StatusBadRequest,
+			serverErrorResponse{Code: http.StatusText(http.StatusBadRequest),
+				Info: "Header Content-Type wasm't found"})
+		return
+	}
+
+	if contType != JsonContType {
+		servConf.makeResponse(w, http.StatusBadRequest,
+			serverErrorResponse{Code: http.StatusText(http.StatusBadRequest),
+				Info: "Invalide Content-Type!"})
+		return
+	}
+
+	reqBody, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		servConf.ServerLogger.logObj.Println(err)
+		servConf.makeResponse(w, http.StatusInternalServerError,
+			serverErrorResponse{Code: http.StatusText(http.StatusInternalServerError),
+				Info: fmt.Sprint(err)})
+		return
+	}
+
+	var postReq PostSignUpUser
+	err = json.Unmarshal(reqBody, &postReq)
+	if err != nil {
+		servConf.ServerLogger.logObj.Println(err)
+		servConf.makeResponse(w, http.StatusInternalServerError,
+			serverErrorResponse{Code: http.StatusText(http.StatusInternalServerError),
+				Info: fmt.Sprint(err)})
+		return
+	}
+	//foundUserCount := checkEmails
+	//	if foundUserCount != 0 {
+	//		servConf.makeResponse(w, http.StatusBadRequest,
+	//			serverErrorResponse({Code: http.StatusText(http.StatusBadRequest),
+	//				Info: "User with this email already exist")})
+	//	} else {
+	//		//userId, err := createUser(postReq)
+	//		if err != nil {
+	//			servConf.Srv
+	//		}
+	//	}
+	servConf.makeResponse(w, http.StatusOK, SignUpUserRespOk{UserId: 15})
+
+}
+
 func (servConf *AitHTTPServer) RunHTTPServer() error {
 
 	err := servConf.initServer()
@@ -391,8 +457,9 @@ func (servConf *AitHTTPServer) RunHTTPServer() error {
 	log.Println("Port: ", servConf.ServerPort)
 
 	router := mux.NewRouter()
-	router.HandleFunc("/translation", servConf.CreatNewTranslationTask).Methods(http.MethodPost)
-	router.HandleFunc("/translation/{id}", servConf.GetTranslationResult).Methods(http.MethodGet)
+	router.HandleFunc("/translation/{userId}", servConf.CreatNewTranslationTask).Methods(http.MethodPost)
+	router.HandleFunc("/translation/{userId}/translate/{taskId}", servConf.GetTranslationResult).Methods(http.MethodGet)
+	router.HandleFunc("/translation/signup", servConf.SignUpUser).Methods(http.MethodPost)
 
 	err = http.ListenAndServe(servConf.ServerHost+":"+servConf.ServerPort, router)
 	if err != nil {
