@@ -9,3 +9,20 @@ services:
       POSTGRES_DB: trdb
     ports:
       - "5432:5432"
+  proxy:
+    image: nginx:latest
+    ports:
+      - "8080:80"
+    volumes:
+      - "../html:/usr/share/nginx/html:ro"
+      - "./nginx.api.conf:/etc/nginx/conf.d/api.conf"
+    links:
+      - translator
+  translator:
+    image: docker_translator-app
+    volumes:
+      - "../resources:/go/resources:rw"
+    depends_on:
+      - db
+    links:
+      - db
