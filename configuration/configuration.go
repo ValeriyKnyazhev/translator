@@ -1,10 +1,11 @@
 package configuration
 
 import (
-	"github.com/go-yaml/yaml"
-	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/go-yaml/yaml"
+	log "github.com/sirupsen/logrus"
 )
 
 type Config struct {
@@ -25,7 +26,7 @@ type Config struct {
 	} `ymal:"server"`
 	DB struct {
 		Host     string `yaml:"host"`
-		Port     int    `yaml":port"`
+		Port     int    `yaml:"port"`
 		User     string `yaml:"user"`
 		Password string `yaml:"password"`
 		DBname   string `yaml:"dbname"`
@@ -39,6 +40,9 @@ func read(config interface{}, path string) (interface{}, error) {
 		return nil, err
 	}
 	configFile, err := ioutil.ReadFile(filename)
+	s := string(configFile[:])
+	log.Info("Config file is as follows: ", s)
+
 	if err != nil {
 		log.Println("unable to read configuration file:", err)
 		return nil, err

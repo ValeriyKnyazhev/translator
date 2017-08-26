@@ -3,6 +3,15 @@ package aitserver
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"mime"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/ValeriyKnyazhev/translator/configuration"
 	"github.com/ValeriyKnyazhev/translator/database"
 	"github.com/ValeriyKnyazhev/translator/executor"
@@ -12,14 +21,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
-	"io"
-	"io/ioutil"
-	"mime"
-	"mime/multipart"
-	"net/http"
-	"os"
-	"strings"
-	"time"
 )
 
 type aitServerLog struct {
@@ -32,12 +33,12 @@ func newLogger(logName string) *aitServerLog {
 	return &aitServerLog{logName, nil, nil}
 }
 
-func (logServ *aitServerLog) creatLogger() error {
+func (logServ *aitServerLog) createLogger() error {
 	var err error
 	logServ.logFile, err = os.OpenFile(logServ.logFileName, os.O_WRONLY|os.O_CREATE, 0666)
 	if err != nil {
-		log.Println(logServ.logFileName)
-		log.Println("creat logger Error: ", err)
+		log.Error(logServ.logFileName)
+		log.Error("Create logger Error: ", err)
 		return err
 	}
 
@@ -81,14 +82,16 @@ func (servConf *AitHTTPServer) initServer() error {
 
 	var err error
 	servConf.ServerConfig, err = configuration.ReadConfigDefault()
+
 	if err != nil {
-		log.Println("Init server Error: ", err)
+		log.Println("Configuration loading error: ", err)
 		return err
 	}
+	log.Info("Configuration found: ", servConf.ServerConfig)
 
 	servConf.ServerLogger = newLogger(servConf.ServerConfig.Server.HTTPServerLogFile)
 
-	err = servConf.ServerLogger.creatLogger()
+	err = servConf.ServerLogger.createLogger()
 	if err != nil {
 		log.Println("Init server Error: ", err)
 		return err
