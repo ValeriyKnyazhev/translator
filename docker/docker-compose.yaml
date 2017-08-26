@@ -14,8 +14,8 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - "../html:/usr/share/nginx/html:ro"
-      - "./nginx.api.conf:/etc/nginx/conf.d/api.conf"
+      - "../html/translator/build:/usr/share/nginx/html:ro"
+      - "./api.conf:/etc/nginx/conf.d/api.conf"
     links:
       - translator
   translator:
@@ -26,3 +26,5 @@ services:
       - db
     links:
       - db
+    ports:
+      - "2345:2345"
