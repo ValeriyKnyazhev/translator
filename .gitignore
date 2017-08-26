@@ -25,3 +25,6 @@ resources/dbconfig.yaml
 
 #go binaries without .exe suffixes (go install, go test and such)
 debug
+main
+
+*.log
