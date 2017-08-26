@@ -335,12 +335,14 @@ func (servConf AitHTTPServer) GetTranslationResult(w http.ResponseWriter, req *h
 
 	currentTime := (dbData.Timestamp.Unix() - time.Now().Unix()) / 60.0
 
+        log.Println(currentTime)
+
 	if dbData.CurrTaskId == 3 && dbData.Status == database.TaskStatusComplete {
 		servConf.makeResponse(w, http.StatusOK, serverOKResponseForGet{LangFrom: dbData.RecognizedLang,
 			LangTo: dbData.TranslatedLang,
 			Text:   dbData.TranslatedText})
 		return
-	} else if dbData.Status == database.TaskStatusStop || currentTime >= 5.0 {
+	} else if dbData.Status == database.TaskStatusStop || currentTime >= 1.0 {
 		dbData.Status = database.TaskStatusRun
 		dbData.Error = database.TaskErrNone
 		err = servConf.DataBase.UpdateData(dbData)
